@@ -16,7 +16,9 @@
 				VerticalAlignment="Center"
 				VerticalContentAlignment="Center"
                                   
-				Number="{Binding Number, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" HorizontalAlignment="Left" Width="229" Height="31" CanShowAddPanel="True" Margin="10,0,0,0">
+				Number="{Binding Number, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" 
+                                      HorizontalAlignment="Left" Width="229" Height="31" CanShowAddPanel="True" Margin="10,0,0,0">
+
                 <currency:CurrencyTextBox.Style>
                     <Style TargetType="{x:Type currency:CurrencyTextBox}">
                         <Style.Triggers>
@@ -38,20 +40,43 @@
 				HorizontalContentAlignment="Left"
 				FontFamily="Consolas"
 				ItemsSource="{Binding StringFormats}"
-				SelectedItem="{Binding StringFormat, ElementName=myCurrencyTextBox, Mode=TwoWay}" HorizontalAlignment="Left" Width="177" Height="31" VerticalAlignment="Top" />
+				SelectedItem="{Binding StringFormat, ElementName=myCurrencyTextBox, Mode=TwoWay}" HorizontalAlignment="Left" MinWidth="50" Height="31" VerticalAlignment="Top" />
 
             <TextBlock
                 Margin="5"
                 VerticalAlignment="Center"
                 Text="Culture:"
                 TextAlignment="Left" HorizontalAlignment="Left" />
+
             <ComboBox
                 Margin="5"
                 HorizontalContentAlignment="Left"
                 FontFamily="Consolas"
                 ItemsSource="{Binding CultureInfos}"
-                SelectedItem="{Binding Culture, ElementName=myCurrencyTextBox, Mode=TwoWay}" HorizontalAlignment="Left" Width="177" Height="31" VerticalAlignment="Top"
+                SelectedItem="{Binding Culture, ElementName=myCurrencyTextBox, Mode=TwoWay}" HorizontalAlignment="Left" MinWidth="50" Height="31" VerticalAlignment="Top"
                 DisplayMemberPath="{Binding EnglishName}"/>
+            <TextBlock
+                Margin="5"
+                VerticalAlignment="Center"
+                Text="InputType:"
+                TextAlignment="Left" HorizontalAlignment="Left" />
+            <ComboBox
+                Margin="5"
+                HorizontalContentAlignment="Left"
+                FontFamily="Consolas"
+                ItemsSource="{Binding InputTypes}"
+                SelectedItem="{Binding InputType, ElementName=myCurrencyTextBox, Mode=TwoWay}" HorizontalAlignment="Left" MinWidth="50" Height="31" VerticalAlignment="Top" />
+            <TextBlock
+                Margin="5"
+                VerticalAlignment="Center"
+                Text="Mode:"
+                TextAlignment="Left" HorizontalAlignment="Left" />
+            <TextBlock
+                Margin="5"
+                VerticalAlignment="Center"
+                Text="{Binding  ExtendedInputCurrentMode, ElementName=myCurrencyTextBox, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                Foreground="Green"
+                TextAlignment="Left" HorizontalAlignment="Left" />
 
         </StackPanel>
         <Label x:Name="label" Content="DATA VALIDATION" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" FontWeight="Bold"/>

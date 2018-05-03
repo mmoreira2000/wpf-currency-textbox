@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using CurrencyTextBoxControl;
 
 namespace CurrencyTextBoxExample
 {
@@ -12,10 +14,10 @@ namespace CurrencyTextBoxExample
 
         private List<CultureInfo> _cultureInfos;
 
-        public List<CultureInfo> CultureInfos
-        {
-            get => CultureInfo.GetCultures(CultureTypes.AllCultures).OrderBy(x => x.EnglishName).ToList();
-        }
+        public IList<CurrencyTextBox.InputTypeEnum> InputTypes => 
+            Enum.GetValues(typeof(CurrencyTextBox.InputTypeEnum)).Cast<CurrencyTextBox.InputTypeEnum>().ToList();
+
+        public List<CultureInfo> CultureInfos => CultureInfo.GetCultures(CultureTypes.AllCultures).OrderBy(x => x.EnglishName).ToList();
 
         private List<string> _stringFormats;
         public List<string> StringFormats
