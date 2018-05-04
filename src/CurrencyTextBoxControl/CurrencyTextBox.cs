@@ -65,7 +65,7 @@ namespace CurrencyTextBoxControl
             DataObject.AddPastingHandler(this, CopyPasteEventHandler);
 
             //Events
-            SetCaretPosition(this);
+            SetCaretPositionFromInputMode(this);
 
             //Disable contextmenu
             ContextMenu = null;
@@ -86,7 +86,7 @@ namespace CurrencyTextBoxControl
 
         private static void ExtendedInputCurrentModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            SetCaretPosition((CurrencyTextBox)d);
+            SetCaretPositionFromInputMode((CurrencyTextBox)d);
         }
 
         public static readonly DependencyProperty ExtendedInputCurrentModeProperty = ExtendedInputCurrentModePropertyKey.DependencyProperty;
@@ -105,9 +105,10 @@ namespace CurrencyTextBoxControl
         private static void InputTypeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var currencyTextBox = (CurrencyTextBox)d;
-            currencyTextBox.ExtendedInputCurrentMode = currencyTextBox.InputType == InputTypeEnum.Extended ? ExtendedInputCurrentModeEnum.Integer : ExtendedInputCurrentModeEnum.Decimal;
+            currencyTextBox.ExtendedInputCurrentMode = currencyTextBox.InputType == InputTypeEnum.Simplified && currencyTextBox.GetDigitCount() > 0 ?
+                                                       ExtendedInputCurrentModeEnum.Decimal : ExtendedInputCurrentModeEnum.Integer;
 
-            SetCaretPosition(currencyTextBox);
+            SetCaretPositionFromInputMode(currencyTextBox);
         }
 
 
@@ -300,6 +301,10 @@ namespace CurrencyTextBoxControl
 
         private static void StringFormatPropertyChanged(DependencyObject obj, DependencyPropertyChangedEventArgs e)
         {
+            var currencyTextBox = (CurrencyTextBox)obj;
+            currencyTextBox.ExtendedInputCurrentMode = currencyTextBox.InputType == InputTypeEnum.Simplified && currencyTextBox.GetDigitCount() > 0 ?
+                                                       ExtendedInputCurrentModeEnum.Decimal : ExtendedInputCurrentModeEnum.Integer;
+
             // Update the Text binding with the new StringFormat
             var textBinding = new Binding
             {
@@ -331,27 +336,27 @@ namespace CurrencyTextBoxControl
 
         protected override void OnGotFocus(RoutedEventArgs e)
         {
-            ExtendedInputCurrentMode = InputType == InputTypeEnum.Extended ?
-                ExtendedInputCurrentModeEnum.Integer : ExtendedInputCurrentModeEnum.Decimal;
+            ExtendedInputCurrentMode = InputType == InputTypeEnum.Simplified && GetDigitCount() > 0 ?
+                ExtendedInputCurrentModeEnum.Decimal : ExtendedInputCurrentModeEnum.Integer;
 
             base.OnGotFocus(e);
         }
 
         protected override void OnTextChanged(TextChangedEventArgs e)
         {
-            SetCaretPosition(this);
+            SetCaretPositionFromInputMode(this);
             base.OnTextChanged(e);
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            SetInputCurrentMode(this);
+            SetInputModeFromCaretPosition(this);
             base.OnKeyDown(e);
         }
 
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
-            SetInputCurrentMode(this);
+            SetInputModeFromCaretPosition(this);
             base.OnMouseUp(e);
         }
 
@@ -366,7 +371,7 @@ namespace CurrencyTextBoxControl
             if (KeyValidator.IsNumericKey(e.Key))
             {
                 AddUndoInList(Number);
-                InsertKey(e.Key);
+                InsertDigitOnRight(e.Key);
             }
             else if (KeyValidator.IsBackspaceKey(e.Key))
             {
@@ -376,30 +381,37 @@ namespace CurrencyTextBoxControl
             else if (KeyValidator.IsUpKey(e.Key))
             {
                 AddUndoInList(Number);
-                if (e.IsRepeat) AddValueArrowUp(UpDownRepeat);
-                else AddValueArrowUp();
+                if (e.IsRepeat) AddValue(UpDownRepeat);
+                else AddValue();
             }
             else if (KeyValidator.IsDownKey(e.Key))
             {
                 AddUndoInList(Number);
 
-                if (e.IsRepeat) AddValueArrowDown(UpDownRepeat);
-                else AddValueArrowDown();
+                if (e.IsRepeat) SubtractValue(UpDownRepeat);
+                else SubtractValue();
             }
-            else if (KeyValidator.IsLeftKey(e.Key) && InputType == InputTypeEnum.Extended)
+            else if (KeyValidator.IsLeftKey(e.Key) &&
+                     InputType != InputTypeEnum.Simplified)
             {
                 ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Integer;
-                SetCaretPosition(this);
+                SetCaretPositionFromInputMode(this);
             }
-            else if (KeyValidator.IsRightKey(e.Key) && InputType == InputTypeEnum.Extended)
+            else if (KeyValidator.IsRightKey(e.Key) &&
+                     InputType != InputTypeEnum.Simplified &&
+                     ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer &&
+                     GetDigitCount() > 0)
             {
                 ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Decimal;
-                SetCaretPosition(this);
+                SetCaretPositionFromInputMode(this);
             }
-            else if (KeyValidator.IsPointKey(e.Key) && InputType == InputTypeEnum.Extended && ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
+            else if (KeyValidator.IsPointKey(e.Key) &&
+                     InputType != InputTypeEnum.Simplified &&
+                     ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer &&
+                     GetDigitCount() > 0)
             {
                 ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Decimal;
-                SetCaretPosition(this);
+                SetCaretPositionFromInputMode(this);
             }
             else if (KeyValidator.IsCtrlZKey(e.Key))
             {
@@ -471,7 +483,7 @@ namespace CurrencyTextBoxControl
         #endregion
 
         #region Private Methods       
-        private static void SetCaretPosition(CurrencyTextBox sender)
+        private static void SetCaretPositionFromInputMode(CurrencyTextBox sender)
         {
             if (sender.InputType == InputTypeEnum.Simplified) sender.CaretIndex = sender.Text.LastIndexOfAny(NumbersArray) + 1;
             else
@@ -479,27 +491,31 @@ namespace CurrencyTextBoxControl
                 if (sender.ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
                 {
                     string decimalSeparator = GetDecimalSeparator(sender);
-                    sender.CaretIndex = sender.Text.LastIndexOf(decimalSeparator, StringComparison.OrdinalIgnoreCase);
+                    var sepIndex = sender.Text.LastIndexOf(decimalSeparator, StringComparison.OrdinalIgnoreCase);
+                    if (sepIndex < 0) sepIndex = sender.Text.LastIndexOfAny(NumbersArray) + 1;
+                    sender.CaretIndex = sepIndex;
                 }
                 else sender.CaretIndex = sender.Text.LastIndexOfAny(NumbersArray) + 1;
             }
         }
 
-        private static void SetInputCurrentMode(CurrencyTextBox textBox)
+        private static void SetInputModeFromCaretPosition(CurrencyTextBox textBox)
         {
             if (textBox.InputType == InputTypeEnum.Simplified)
             {
-                textBox.ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Decimal;
+                textBox.ExtendedInputCurrentMode = textBox.GetDigitCount() > 0 ?
+                                                   ExtendedInputCurrentModeEnum.Decimal :
+                                                   ExtendedInputCurrentModeEnum.Integer;
             }
             else
             {
                 string decimalSeparator = GetDecimalSeparator(textBox);
                 int indexDecimal = textBox.Text.LastIndexOf(decimalSeparator, StringComparison.OrdinalIgnoreCase);
 
-                if (indexDecimal >= textBox.CaretIndex) textBox.ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Integer;
+                if (indexDecimal < 0 || indexDecimal >= textBox.CaretIndex) textBox.ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Integer;
                 else textBox.ExtendedInputCurrentMode = ExtendedInputCurrentModeEnum.Decimal;
             }
-            SetCaretPosition(textBox);
+            SetCaretPositionFromInputMode(textBox);
         }
 
         private void Ctb_NumberChanged(object sender, EventArgs e)
@@ -511,10 +527,18 @@ namespace CurrencyTextBoxControl
             _popupLabel.Content = ctb.Number >= 0 ? "+" : "-";
         }
 
+        private static string GetDecimalSeparator(CurrencyTextBox control)
+        {
+            if (string.IsNullOrEmpty(control.StringFormat) || !control.StringFormat.Left(1).Equals("C", StringComparison.OrdinalIgnoreCase))
+                return control.Culture.NumberFormat.NumberDecimalSeparator;
+
+            return control.Culture.NumberFormat.CurrencyDecimalSeparator;
+        }
+
         /// <summary>
         /// Insert number from key
         /// </summary>
-        private void InsertKey(Key key)
+        private void InsertDigitOnRight(Key key)
         {
             //Max length fix
             if (MaxLength != 0 && Number.ToString(Culture).Length > MaxLength) return;
@@ -522,10 +546,14 @@ namespace CurrencyTextBoxControl
 
             try
             {
-                var parts = GetNumberParts();
-                string stringNumber = string.Empty;
+                decimal num = Number;
+                if (IsPercent()) num *= 100;
 
-                if (InputType == InputTypeEnum.Simplified)
+                var parts = GetNumberParts(num);
+                string stringNumber;
+
+                if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal &&
+                    (InputType == InputTypeEnum.Extended || InputType == InputTypeEnum.Extended))
                 {
                     stringNumber = parts.IntegerPart.ToString("D") +
                                    parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0') +
@@ -551,23 +579,201 @@ namespace CurrencyTextBoxControl
                 }
 
                 var dec = decimal.Parse(stringNumber, Culture);
+                if (IsPercent()) dec /= 100;
                 if (parts.IsNegative) dec *= -1;
-
                 Number = dec;
             }
             catch (OverflowException)
             {
                 Number = Number < 0 ? decimal.MinValue : decimal.MaxValue;
             }
-
         }
 
-        private static string GetDecimalSeparator(CurrencyTextBox control)
+        /// <summary>
+        /// Delete the right digit of number property
+        /// </summary>
+        private void RemoveRightMostDigit()
         {
-            if (string.IsNullOrEmpty(control.StringFormat) || !control.StringFormat.Left(1).Equals("C", StringComparison.OrdinalIgnoreCase))
-                return control.Culture.NumberFormat.NumberDecimalSeparator;
+            try
+            {
+                decimal num = Number;
+                if (IsPercent()) num *= 100;
 
-            return control.Culture.NumberFormat.CurrencyDecimalSeparator;
+                var parts = GetNumberParts(num);
+                string stringNumber = string.Empty;
+
+                if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal &&
+                    (InputType == InputTypeEnum.Extended || InputType == InputTypeEnum.Extended))
+                {
+                    stringNumber = parts.IntegerPart.ToString("D") + parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
+                    stringNumber = stringNumber.Left(stringNumber.Length - 1).PadLeft(parts.DigitCount + 1, '0');
+
+                    stringNumber = stringNumber.Left(stringNumber.Length - parts.DigitCount) +
+                                   Culture.NumberFormat.NumberDecimalSeparator +
+                                   stringNumber.Right(parts.DigitCount);
+                }
+                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
+                {
+                    stringNumber = parts.IntegerPart.ToString("D");
+                    stringNumber = stringNumber.Left(stringNumber.Length - 1);
+                    if (string.IsNullOrEmpty(stringNumber)) stringNumber = "0";
+
+                    stringNumber = stringNumber +
+                                   Culture.NumberFormat.NumberDecimalSeparator +
+                                   parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
+
+                }
+                else
+                {
+                    stringNumber = parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
+                    stringNumber = stringNumber.Left(stringNumber.Length - 1).PadLeft(parts.DigitCount, '0');
+
+                    stringNumber = parts.IntegerPart.ToString("D") +
+                                   Culture.NumberFormat.NumberDecimalSeparator +
+                                   stringNumber;
+                }
+
+
+
+                var dec = decimal.Parse(stringNumber, Culture);
+                if (IsPercent()) dec /= 100;
+                if (parts.IsNegative) dec *= -1;
+                Number = dec;
+            }
+            catch
+            {
+                Clear();
+            }
+        }
+
+        private void AddValue(int amount = 1)
+        {
+            try
+            {
+                decimal num = Number;
+                if (IsPercent()) num *= 100;
+
+                var parts = GetNumberParts(num);
+
+                if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal &&
+                    (InputType == InputTypeEnum.Extended || InputType == InputTypeEnum.Extended))
+                {
+                    var strValue = $"0{parts.DecimalSeparator}{amount.ToString(Culture).PadLeft(parts.DigitCount, '0')}";
+                    parts = GetNumberParts(num + decimal.Parse(strValue, Culture));
+                }
+                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal)
+                {
+                    int maxDecimalValue = int.Parse(new string('9', parts.DigitCount), Culture);
+                    if (parts.IsNegative) parts.DecimalPart -= amount;
+                    else parts.DecimalPart += amount;
+
+                    if (parts.DecimalPart > maxDecimalValue) parts.DecimalPart = maxDecimalValue;
+                    else if (parts.DecimalPart < 0) parts.DecimalPart = 0;
+                }
+                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
+                {
+                    if (parts.IsNegative) parts.IntegerPart -= amount;
+                    else parts.IntegerPart += amount;
+
+                    if (parts.IntegerPart < 0)
+                    {
+                        parts.IsNegative = false;
+                        parts.IntegerPart = Math.Abs(parts.IntegerPart);
+                    }
+                }
+
+                string stringNumber = parts.IntegerPart.ToString("D") +
+                                      Culture.NumberFormat.NumberDecimalSeparator +
+                                      parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
+
+                var dec = Math.Round(decimal.Parse(stringNumber, Culture), parts.DigitCount);
+                if (IsPercent()) dec /= 100;
+                if (parts.IsNegative) dec *= -1;
+                Number = dec;
+            }
+            catch (OverflowException)
+            {
+                Number = Number < 0 ? decimal.MinValue : decimal.MaxValue;
+            }
+        }
+
+        private void SubtractValue(int amount = 1)
+        {
+            try
+            {
+                decimal num = Number;
+                if (IsPercent()) num *= 100;
+
+                var parts = GetNumberParts(num);
+
+                if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal &&
+                    (InputType == InputTypeEnum.Extended || InputType == InputTypeEnum.Extended))
+                {
+                    var strValue = $"0{parts.DecimalSeparator}{amount.ToString(Culture).PadLeft(parts.DigitCount, '0')}";
+                    parts = GetNumberParts(num - decimal.Parse(strValue, Culture));
+                }
+                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal)
+                {
+                    int maxDecimalValue = int.Parse(new string('9', parts.DigitCount), Culture);
+                    if (parts.IsNegative) parts.DecimalPart += amount;
+                    else parts.DecimalPart -= amount;
+
+                    if (parts.DecimalPart > maxDecimalValue) parts.DecimalPart = maxDecimalValue;
+                    else if (parts.DecimalPart < 0) parts.DecimalPart = 0;
+                }
+                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
+                {
+                    if (parts.IsNegative) parts.IntegerPart += amount;
+                    else parts.IntegerPart -= amount;
+
+                    if (parts.IntegerPart < 0)
+                    {
+                        parts.IsNegative = true;
+                        parts.IntegerPart = Math.Abs(parts.IntegerPart);
+                    }
+                }
+
+                string stringNumber = parts.IntegerPart.ToString("D") +
+                                      Culture.NumberFormat.NumberDecimalSeparator +
+                                      parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
+
+                var dec = Math.Round(decimal.Parse(stringNumber, Culture), parts.DigitCount);
+                if (IsPercent()) dec /= 100;
+                if (parts.IsNegative) dec *= -1;
+                Number = dec;
+            }
+            catch (OverflowException)
+            {
+                Number = Number < 0 ? decimal.MinValue : decimal.MaxValue;
+            }
+        }
+
+        private NumberParts GetNumberParts(decimal value)
+        {
+            var resp = new NumberParts();
+            resp.IsNegative = value < 0;
+            resp.DigitCount = GetDigitCount();
+            resp.DecimalSeparator = StringFormat.StartsWith("C", StringComparison.OrdinalIgnoreCase)
+                                    ? Culture.NumberFormat.CurrencyDecimalSeparator
+                                    : Culture.NumberFormat.NumberDecimalSeparator;
+
+            string numberString = Math.Abs(value).ToString("0.##############", Culture);
+            string[] numParts = numberString.Split(Culture.NumberFormat.NumberDecimalSeparator.ToCharArray());
+            if (numParts.Length == 1)
+            {
+                resp.IntegerPart = long.Parse(numParts[0]);
+            }
+            else if (numParts.Length == 2)
+            {
+                resp.IntegerPart = long.Parse(numParts[0]);
+                resp.DecimalPart = long.Parse(numParts[1].PadRight(resp.DigitCount, '0'));
+            }
+            else
+            {
+                throw new InvalidDataException($"Error parsing number '{numParts}'. This number returned {numParts.Length} when the maximum allowed was 2");
+            }
+
+            return resp;
         }
 
         /// <summary>
@@ -604,98 +810,25 @@ namespace CurrencyTextBoxControl
         /// <summary>
         /// Get the number of digit .
         /// </summary>
-        private int GetDigitCount()
+        /// <param name="format"></param>
+        private int GetDigitCount(string format = null)
         {
-            if (string.IsNullOrEmpty(StringFormat)) return 1;
-            if (string.Equals("N", StringFormat, StringComparison.OrdinalIgnoreCase)) return 2;
-            if (string.Equals("C", StringFormat, StringComparison.OrdinalIgnoreCase)) return 2;
+            if (string.IsNullOrEmpty(format)) format = StringFormat;
+            if (string.IsNullOrEmpty(format)) return 1;
+            if (string.Equals("N", format, StringComparison.OrdinalIgnoreCase)) return 2;
+            if (string.Equals("C", format, StringComparison.OrdinalIgnoreCase)) return 2;
+            if (string.Equals("P", format, StringComparison.OrdinalIgnoreCase)) return 2;
 
-            var s = StringFormat.Right(1);
-            int resp;
-            if (int.TryParse(s, NumberStyles.Integer, Culture, out resp)) return resp;
+            var lastDigit = format.Right(1);
+            if (int.TryParse(lastDigit, NumberStyles.Integer, Culture, out var resp)) return resp;
 
             return 1;
         }
 
-        /// <summary>
-        /// Delete the right digit of number property
-        /// </summary>
-        private void RemoveRightMostDigit()
+        private bool IsPercent()
         {
-            try
-            {
-                var parts = GetNumberParts();
-                string stringNumber = string.Empty;
-
-                if (InputType == InputTypeEnum.Simplified)
-                {
-                    stringNumber = parts.IntegerPart.ToString("D") + parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
-                    stringNumber = stringNumber.Left(stringNumber.Length - 1).PadLeft(parts.DigitCount + 1, '0');
-
-                    stringNumber = stringNumber.Left(stringNumber.Length - parts.DigitCount) +
-                                   Culture.NumberFormat.NumberDecimalSeparator +
-                                   stringNumber.Right(parts.DigitCount);
-                }
-                else if (ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Integer)
-                {
-                    stringNumber = parts.IntegerPart.ToString("D");
-                    stringNumber = stringNumber.Left(stringNumber.Length - 1);
-                    if (string.IsNullOrEmpty(stringNumber)) stringNumber = "0";
-
-                    stringNumber = stringNumber +
-                                   Culture.NumberFormat.NumberDecimalSeparator +
-                                   parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
-
-                }
-                else
-                {
-                    stringNumber = parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
-                    stringNumber = stringNumber.Left(stringNumber.Length - 1).PadLeft(parts.DigitCount, '0');
-
-                    stringNumber = parts.IntegerPart.ToString("D") +
-                                   Culture.NumberFormat.NumberDecimalSeparator +
-                                   stringNumber;
-                }
-
-
-
-                var dec = decimal.Parse(stringNumber, Culture);
-                if (parts.IsNegative) dec *= -1;
-
-                Number = dec;
-            }
-            catch
-            {
-                Clear();
-            }
-        }
-
-        private NumberParts GetNumberParts()
-        {
-            var resp = new NumberParts();
-            resp.IsNegative = Number < 0;
-            resp.DigitCount = GetDigitCount();
-            resp.DecimalSeparator = StringFormat.StartsWith("C", StringComparison.OrdinalIgnoreCase)
-                                    ? Culture.NumberFormat.CurrencyDecimalSeparator
-                                    : Culture.NumberFormat.NumberDecimalSeparator;
-
-            string numberString = Math.Abs(Number).ToString("0.##############", Culture);
-            string[] numParts = numberString.Split(Culture.NumberFormat.NumberDecimalSeparator.ToCharArray());
-            if (numParts.Length == 1)
-            {
-                resp.IntegerPart = long.Parse(numParts[0]);
-            }
-            else if (numParts.Length == 2)
-            {
-                resp.IntegerPart = long.Parse(numParts[0]);
-                resp.DecimalPart = long.Parse(numParts[1].PadRight(resp.DigitCount, '0'));
-            }
-            else
-            {
-                throw new InvalidDataException($"Error parsing number '{numParts}'. This number returned {numParts.Length} when the maximum allowed was 2");
-            }
-
-            return resp;
+            if (string.IsNullOrEmpty(StringFormat)) return false;
+            return StringFormat.StartsWith("P", StringComparison.OrdinalIgnoreCase);
         }
 
         #endregion Privates methodes
@@ -785,70 +918,6 @@ namespace CurrencyTextBoxControl
         /// Alternate value to Negative-Positive and Positive-Negative
         /// </summary>
         public void InvertValue() => Number *= -1;
-
-
-        private void AddValueArrowUp(int amount = 1)
-        {
-            //if (Number < 0)
-            //{
-            //    if (amount > 0) amount *= -1;
-            //}
-            AddOrSubtract(amount);
-        }
-
-        private void AddValueArrowDown(int amount = 1)
-        {
-            //if (Number >= 0)
-            {
-                if (amount > 0) amount *= -1;
-            }
-            AddOrSubtract(amount);
-        }
-        /// <summary>
-        /// Add or Remove the amount from number
-        /// </summary>
-        /// <param name="amount">The amount to be added or removed</param>
-        private void AddOrSubtract(int amount = 1)
-        {
-            try
-            {
-                var parts = GetNumberParts();
-                string stringNumber = string.Empty;
-
-                if (InputType == InputTypeEnum.Simplified || ExtendedInputCurrentMode == ExtendedInputCurrentModeEnum.Decimal)
-                {
-                    parts.DecimalPart += amount;
-                    if (parts.DecimalPart < 0) parts.DecimalPart = 0;
-                }
-                else
-                {
-                    bool reverse = parts.IsNegative && parts.IntegerPart == 0 && amount > 0;
-
-                    if (parts.IsNegative && parts.IntegerPart > 0) parts.IntegerPart -= amount;
-                    else parts.IntegerPart += amount;
-
-                    if (parts.IntegerPart < 0 || reverse)
-                    {
-                        parts.IsNegative = !parts.IsNegative;
-                        parts.IntegerPart = Math.Abs(parts.IntegerPart);
-                    }
-                }
-
-                stringNumber = parts.IntegerPart.ToString("D") +
-                               Culture.NumberFormat.NumberDecimalSeparator +
-                               parts.DecimalPart.ToString("D").PadLeft(parts.DigitCount, '0');
-
-                var dec = Math.Round(decimal.Parse(stringNumber, Culture), parts.DigitCount);
-                if (parts.IsNegative) dec *= -1;
-                Number = dec;
-            }
-            catch (OverflowException)
-            {
-                Number = Number < 0 ? decimal.MinValue : decimal.MaxValue;
-            }
-
-
-        }
 
         #endregion Other function
 
@@ -964,7 +1033,8 @@ namespace CurrencyTextBoxControl
         public enum InputTypeEnum
         {
             Simplified,
-            Extended
+            Extended,
+            Segmented
         }
 
         public enum ExtendedInputCurrentModeEnum

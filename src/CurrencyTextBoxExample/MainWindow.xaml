@@ -15,7 +15,7 @@
             <currency:CurrencyTextBox x:Name="myCurrencyTextBox"
 				VerticalAlignment="Center"
 				VerticalContentAlignment="Center"
-                                  
+                UpDownRepeat="1"                  
 				Number="{Binding Number, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" 
                                       HorizontalAlignment="Left" Width="229" Height="31" CanShowAddPanel="True" Margin="10,0,0,0">
 
